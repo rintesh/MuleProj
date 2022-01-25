@@ -1,27 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
-	xmlns="http://www.mulesoft.org/schema/mule/core"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
-http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
 	<flow name="interfaceFlow" doc:id="67bf6c97-f0ec-43e0-99d9-a676b4186a50" >
-		<scheduler doc:name="Scheduler" doc:id="245946ac-a0ca-4571-bd2e-dd71e8e298af" >
+		<file:listener doc:id="a251db20-8106-42dd-b8d4-9e899beda0c2" directory="InputFiles\" outputMimeType="application/xlsx" config-ref="File_Config">
 			<scheduling-strategy >
-				<fixed-frequency frequency="15" timeUnit="SECONDS"/>
+				<fixed-frequency frequency="10000" />
 			</scheduling-strategy>
-		</scheduler>
-		<db:select doc:name="Select contacts" doc:id="d3d66df8-3787-4e38-b1d2-133cea9c19f7" config-ref="Database_Config">
-			<db:sql ><![CDATA[select * from contacts;]]></db:sql>
-		</db:select>
-		<ee:transform doc:name="Transform Message" doc:id="6dba108d-1ca7-4044-a9ac-ec1551f550fb" >
+			<file:matcher filenamePattern="Migration*.xlsx" />
+		</file:listener>
+		<ee:transform doc:name="Transform to JSON" doc:id="bf69a5d7-00f2-4e06-833c-6cf5b7e5bee3" >
 			<ee:message >
 				<ee:set-payload ><![CDATA[%dw 2.0
 output application/json
 ---
-payload]]></ee:set-payload>
+flatten(valuesOf(payload)) map {
+	id: $.Csid default "",
+	firstName: $.firstName default "",
+	lastName: $.lastName default "",
+	DOB: $.Birthdate as Date {format: "yyyy-MM-dd"} default ($.Birthdate as String ++ "[WrongDate]"),
+	gender: $.Gender default "",
+	emailAdd: $.Email default ""
+}]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<logger level="INFO" doc:name="Logger" doc:id="53f9b1e6-2b17-4cc5-a963-9bcad12d4ee3" />
+		<set-variable value='#[output application/json&#10;---&#10;payload filter (&#10;					( isEmpty($.id) )&#10;					or&#10;					( isEmpty($.emailAdd) ) &#10;					or &#10;					(&#10;						!( isEmpty($.id) )&#10;						and&#10;						!( isEmpty($.emailAdd) )&#10;						and&#10;						!( isEmpty($.gender) )&#10;						and&#10;						!( isEmpty($.firstName) )&#10;						and					&#10;						!( isEmpty($.lastName) )	&#10;						and&#10;						($.DOB contains "[WrongDate]")&#10;					)					&#10;&#10;				) &#10;				map ($ ++ { error : "Wrong data format or missing Id-email"})]' doc:name="Error" doc:id="e7cb663a-96ac-4d5a-b1a3-5b153e100b52" variableName="Error"/>
+		<ee:transform doc:name="Transform Message" doc:id="c149c647-9ad7-4eb6-b88e-aa9550416bc3" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+(payload -- vars.Error) map (($ mapObject 
+	if(($$) ~= "DOB")
+		($$): $ replace "[WrongDate]" with ""
+	else
+		($$):$
+) ++ {error: null} )]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="e8a1de27-e3a5-4051-ac1f-e69f01f19fd2" />
+		<try doc:name="Try" doc:id="f754f2fa-8a16-4e1e-b7fe-73496d775a8a" >
+			<file:read doc:name="Read" doc:id="dae6b05e-e51f-4b61-8c2e-57b5bee8b772" config-ref="File_Config" path='#["Error\ErrorFile" ++ now() as Date ++ ".csv"]'/>
+			<file:write doc:name="Write" doc:id="61acadd4-1345-4b74-ad90-d766c837aaa4" path='#["Error\ErrorFile" ++ now() as Date ++ ".csv"]' mode="APPEND" config-ref="File_Config">
+				<file:content ><![CDATA[#[output application/csv header=false
+---
+vars.Error map ($ mapObject 
+	if(($$) ~= "DOB")
+		($$): $ replace "[WrongDate]" with ""
+	else
+		($$):$
+)]]]></file:content>
+			</file:write>
+			<error-handler >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="de8e690d-378d-48a6-a654-2e3fe0dea0d3" type="FILE:ILLEGAL_PATH">
+					<file:write doc:name="Write" doc:id="4fec7c32-e357-4710-a742-e017127befcd" path='#["Error\ErrorFile" ++ now() as Date ++ ".csv"]' mode="CREATE_NEW" config-ref="File_Config">
+						<file:content ><![CDATA[#[output application/csv
+---
+vars.Error map ($ mapObject 
+	if(($$) ~= "DOB")
+		($$): $ replace "[WrongDate]" with ""
+	else
+		($$):$
+)]]]></file:content>
+					</file:write>
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<flow-ref doc:name="implementationFlow" doc:id="c5c90b74-8876-479d-b8ee-aacf4f99b266" name="implementationFlow"/>
 	</flow>
 </mule>
