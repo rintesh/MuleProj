@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	<error-handler name="Global_Error_Handler" doc:id="fcd7fad3-83d9-40ff-803b-bf0cf7d51920" >
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="869e61ff-0cf2-44d5-b348-24d256316afe" type="STREAM_MAXIMUM_SIZE_EXCEEDED">
+			<logger level="INFO" doc:name="Logger" doc:id="ad61f256-a5ce-4c7b-8ffa-28e4c4c87896" />
+		</on-error-continue>
+	</error-handler>
+</mule>

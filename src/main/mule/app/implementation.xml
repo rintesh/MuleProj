@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<flow name="implementationFlow" doc:id="d628f7d7-c26b-4b36-b862-c9d823dbe4a8" >
+		<logger level="INFO" doc:name="Logger" doc:id="7f6d9235-3ee9-42fc-8075-00149b34d1b9" message="=============================Control came to implementationFlow=================================="/>
+		<batch:job jobName="implementationBatch_Job" doc:id="1508b383-b3ca-4322-8fec-7e0927395c68" maxFailedRecords="-1">
+			<batch:process-records >
+				<batch:step name="Leads" doc:id="ba457acc-70ec-4578-a39d-324f989223de" acceptExpression="#[!( isEmpty(payload.id) ) and !( isEmpty(payload.emailAdd) ) and ( isEmpty(payload.gender) ) and ( isEmpty(payload.firstName) ) and ( isEmpty(payload.lastName) ) and ( isEmpty(payload.DOB ))]">
+					<batch:aggregator doc:name="Lead Aggregator" doc:id="edc24ed2-5f47-43c4-ac44-f5142d5c1b18" size="10" preserveMimeTypes="true">
+						<ee:transform doc:name="Transform to JSON" doc:id="bb11ba17-f62e-4a0c-820d-5c0f592f0e52">
+							<ee:message>
+								<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload)]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<flow-ref doc:name="Lead" doc:id="3eb001aa-93a2-4c9c-bf86-8e9ac54da32a" name="Lead" />
+					</batch:aggregator>
+				</batch:step>
+				<batch:step name="Contacts" doc:id="d68bf0aa-0007-4aa9-beb8-399211d1e12c" acceptExpression="#[ !( isEmpty(payload.id) ) and !( isEmpty(payload.emailAdd) )  ]">
+					<set-payload value='#[output application/json&#10;---&#10;if(&#10;	( isEmpty(payload.gender) ) &#10;	and &#10;	( isEmpty(payload.firstName) ) &#10;	and &#10;	( isEmpty(payload.lastName) ) &#10;	and &#10;	( isEmpty(payload.DOB ))	&#10;) null&#10;&#10;&#10;&#10;else if(&#10;	( isEmpty(payload.gender) ) &#10;	or &#10;	( isEmpty(payload.firstName) ) &#10;	or &#10;	( isEmpty(payload.lastName) ) &#10;	or &#10;	( isEmpty(payload.DOB ))	&#10;) &#10;	(	payload mapObject &#10;			if(($$) ~= "error")&#10;				($$): "Contact missing 1 out of 4 required fields"&#10;			else&#10;				($$):$ &#10;	)&#10;	&#10;	&#10;else &#10;	payload]' doc:name="Set Payload" doc:id="56088fe0-16c8-4a62-beb9-dd4f8832fd54" />
+					<choice doc:name="Choice" doc:id="ede2ff9e-33e4-4399-962e-1baf8722ab5d" >
+						<when expression='#[payload.error == "Contact missing 1 out of 4 required fields"]'>
+							<raise-error doc:name="Raise error" doc:id="86e5e04f-40fb-494d-bf88-f99dca4e791a" type="CONTACT:MISSING_FIELD" description="Contact missing 1 out of 4 fields ( Gender, firstName, lastName, dateOfBirth )"/>
+						</when>
+						<otherwise >
+							<logger level="INFO" doc:name="Logger" doc:id="187662b4-052f-4962-9390-bf1870d3aac8" />
+						</otherwise>
+					</choice>
+					<batch:aggregator doc:name="Contact Aggregator" doc:id="11e77176-91aa-4ea3-9762-09bb76e465a4" size="10" preserveMimeTypes="true">
+						<ee:transform doc:name="Transform to JSON" doc:id="79651946-bd49-47ec-9e61-ef77e56ce4f2" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload filter($!=null))]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<flow-ref doc:name="Contact" doc:id="fec7b2f7-b377-43b2-b723-e26d69916c53" name="Contact"/>
+					</batch:aggregator>
+				</batch:step>
+				<batch:step name="Error_Step" doc:id="df87b331-9eb1-4648-a701-ce4aeee6aacc" acceptPolicy="ONLY_FAILURES">
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="9d01f03d-ac38-41ae-bc9d-8244475e600e" size="10" preserveMimeTypes="true">
+						<ee:transform doc:name="Transform Message" doc:id="9ad1a5d9-0d71-4153-8f2d-ffe2157ade85" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload)]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<ee:transform doc:name="Transform to CSV" doc:id="bb45870e-00cc-4efd-b20c-fa2258523f8d" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv header=false
+---
+payload filter($!=null) map $]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<file:write doc:name="Write" doc:id="a42991b1-2173-49ad-a789-598f701a5e93" config-ref="File_Config" path="#[p('file.error') ++ now() as Date ++ &quot;.csv&quot;]" mode="APPEND" >
+						</file:write>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+		</batch:job>
+	</flow>
+	<flow name="Contact" doc:id="6718d7e4-72a3-4eed-890c-6fcda3bfc131" >
+		<db:bulk-insert doc:name="Bulk insert to Contacts Table" doc:id="7a129c6c-192a-4fd4-a12c-12b7d7608e49" config-ref="Database_Config">
+			<db:sql ><![CDATA[insert into contacts (csid, firstname, lastname, birthdate, email, gender) values (:id, :firstName, :lastName, :DOB, :emailAdd, :gender)]]></db:sql>
+		</db:bulk-insert>
+		<logger level="INFO" doc:name="Logger" doc:id="701d268f-0441-4a19-aab6-3d4720feb2f0" />
+	</flow>
+	<flow name="Lead" doc:id="eeb6b2e4-4c48-4991-b1ec-1bd659d1c860" >
+		<db:bulk-insert doc:name="Bulk insert into Leads table" doc:id="0507ea06-b2cb-4fb5-b8be-0df9e9b2464f" config-ref="Database_Config">
+			<db:sql ><![CDATA[insert into leads(csid, email) values (:id, :emailAdd)]]></db:sql>
+		</db:bulk-insert>
+		<logger level="INFO" doc:name="Logger" doc:id="c5d14139-dcd8-4771-85ee-b1b50f197dd4" />
+	</flow>
+</mule>

@@ -1,15 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:file="http://www.mulesoft.org/schema/mule/file"
-	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns="http://www.mulesoft.org/schema/mule/core"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
 http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
-http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
 	<db:config name="Database_Config" doc:name="Database Config" doc:id="9224db7c-80b5-47ab-a195-813cae011fdd" >
-		<db:my-sql-connection host="localhost" port="3306" user="root" password="t6Jx@vDyDL" database="mysql" />
+		<db:my-sql-connection password="t6Jx@vDyDL" host="${secure::database.host}" port="${secure::database.port}" user="${secure::database.user}" database="${secure::database.db}"/>
 	</db:config>
 	<file:config name="File_Config" doc:name="File Config" doc:id="18d410d7-f8c6-4547-9250-4dc915ec1b5e" >
-		<file:connection workingDir="C:\Users\rinte\Desktop\MulesoftProject\"/>
+		<file:connection workingDir="${secure::file.workingDir}"/>
 	</file:config>
+	<configuration-properties doc:name="Configuration properties" doc:id="1a6a9aa5-7e2f-433f-a1e7-523d871e75b0" file="config/${env}.yaml" />
+	<global-property doc:name="Global Property" doc:id="bcaf0e06-2097-4f84-851a-22a6b6ebe170" name="env" value="DEV" />
+	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="aea1d808-84b3-4f77-8f46-680750ecd344" file="config/${env}.yaml" key="password" >
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
 </mule>

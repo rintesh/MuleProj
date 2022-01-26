@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_6718d7e4_72a3_4eed_890c_6fcda3bfc131_Input_Variables_Error = Null
+

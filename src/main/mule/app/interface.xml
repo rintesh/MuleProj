@@ -7,7 +7,7 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
 http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
 	<flow name="interfaceFlow" doc:id="67bf6c97-f0ec-43e0-99d9-a676b4186a50" >
-		<file:listener doc:id="a251db20-8106-42dd-b8d4-9e899beda0c2" directory="InputFiles\" outputMimeType="application/xlsx" config-ref="File_Config">
+		<file:listener doc:id="a251db20-8106-42dd-b8d4-9e899beda0c2" outputMimeType="application/xlsx" config-ref="File_Config" directory="${file.input}">
 			<scheduling-strategy >
 				<fixed-frequency frequency="10000" />
 			</scheduling-strategy>
@@ -33,8 +33,9 @@ flatten(valuesOf(payload)) map {
 			<ee:message >
 				<ee:set-payload ><![CDATA[%dw 2.0
 output application/json
+var idSet= payload.id -- vars.Error.id
 ---
-(payload -- vars.Error) map (($ mapObject 
+payload filter(idSet contains $.id) map (($ mapObject 
 	if(($$) ~= "DOB")
 		($$): $ replace "[WrongDate]" with ""
 	else
@@ -44,9 +45,11 @@ output application/json
 		</ee:transform>
 		<logger level="INFO" doc:name="Logger" doc:id="e8a1de27-e3a5-4051-ac1f-e69f01f19fd2" />
 		<try doc:name="Try" doc:id="f754f2fa-8a16-4e1e-b7fe-73496d775a8a" >
-			<file:read doc:name="Read" doc:id="dae6b05e-e51f-4b61-8c2e-57b5bee8b772" config-ref="File_Config" path='#["Error\ErrorFile" ++ now() as Date ++ ".csv"]'/>
-			<file:write doc:name="Write" doc:id="61acadd4-1345-4b74-ad90-d766c837aaa4" path='#["Error\ErrorFile" ++ now() as Date ++ ".csv"]' mode="APPEND" config-ref="File_Config">
-				<file:content ><![CDATA[#[output application/csv header=false
+			<file:read doc:name="Read" doc:id="dae6b05e-e51f-4b61-8c2e-57b5bee8b772" config-ref="File_Config" path="#[p('file.error') ++ now() as Date ++ &quot;.csv&quot;]" target="Error"/>
+			<choice doc:name="Choice" doc:id="00e58279-c7b9-455a-b375-012a37a51313" >
+				<when expression="#[sizeOf(vars.Error) &gt; 0]">
+					<file:write doc:name="Append over existing records" doc:id="61acadd4-1345-4b74-ad90-d766c837aaa4" path="#[p('file.error') ++ now() as Date ++ &quot;.csv&quot;]" mode="APPEND" config-ref="File_Config">
+				<file:content><![CDATA[#[output application/csv header=false
 ---
 vars.Error map ($ mapObject 
 	if(($$) ~= "DOB")
@@ -55,10 +58,17 @@ vars.Error map ($ mapObject
 		($$):$
 )]]]></file:content>
 			</file:write>
+				</when>
+				<otherwise >
+					<logger level="INFO" doc:name="Logger" doc:id="362ea46c-6f88-42d7-be3b-d279164c094f" message="No error record present to be written onto the ${secure::file.workingDir}${file.error}.csv "/>
+				</otherwise>
+			</choice>
 			<error-handler >
 				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="de8e690d-378d-48a6-a654-2e3fe0dea0d3" type="FILE:ILLEGAL_PATH">
-					<file:write doc:name="Write" doc:id="4fec7c32-e357-4710-a742-e017127befcd" path='#["Error\ErrorFile" ++ now() as Date ++ ".csv"]' mode="CREATE_NEW" config-ref="File_Config">
-						<file:content ><![CDATA[#[output application/csv
+					<choice doc:name="Choice" doc:id="dbf0570b-ad8c-4960-879a-fc1d907bdaa5" >
+						<when expression="#[sizeOf(vars.error) &gt; 0]">
+							<file:write doc:name="Write new records" doc:id="4fec7c32-e357-4710-a742-e017127befcd" path="#[p('file.error') ++ now() as Date ++ &quot;.csv&quot;]" mode="CREATE_NEW" config-ref="File_Config">
+						<file:content><![CDATA[#[output application/csv
 ---
 vars.Error map ($ mapObject 
 	if(($$) ~= "DOB")
@@ -67,6 +77,22 @@ vars.Error map ($ mapObject
 		($$):$
 )]]]></file:content>
 					</file:write>
+						</when>
+						<otherwise >
+							<file:write doc:name="Write only columns" doc:id="976b8a23-468f-4c88-b77a-41ee3e903c04" config-ref="File_Config" path="#[p('file.error') ++ now() as Date ++ &quot;.csv&quot;]" mode="CREATE_NEW">
+								<file:content ><![CDATA[#[output application/csv header=false
+---
+[{
+	id: "id",
+	firstName: "firstName",
+	lastName: "lastName",
+	DOB: "DOB",
+	gender: "gender",
+	emailAdd: "emailAdd"
+}]]]]></file:content>
+							</file:write>
+						</otherwise>
+					</choice>
 				</on-error-continue>
 			</error-handler>
 		</try>

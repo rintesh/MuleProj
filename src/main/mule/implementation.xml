@@ -1,43 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-
-<mule xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
-	xmlns="http://www.mulesoft.org/schema/mule/core"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
-http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
-http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
-	<flow name="implementationFlow" doc:id="d628f7d7-c26b-4b36-b862-c9d823dbe4a8" >
-		<logger level="INFO" doc:name="Logger" doc:id="7f6d9235-3ee9-42fc-8075-00149b34d1b9" message="=============================Control came to implementationFlow=================================="/>
-		<batch:job jobName="implementationBatch_Job" doc:id="1508b383-b3ca-4322-8fec-7e0927395c68" maxFailedRecords="-1">
-			<batch:process-records >
-				<batch:step name="Contacts" doc:id="d68bf0aa-0007-4aa9-beb8-399211d1e12c" acceptExpression="#[ !( isEmpty(payload.id) ) and !( isEmpty(payload.emailAdd) )  ]">
-					<set-payload value='#[output application/json&#10;---&#10;if(&#10;	( isEmpty(payload.gender) ) &#10;	and &#10;	( isEmpty(payload.firstName) ) &#10;	and &#10;	( isEmpty(payload.lastName) ) &#10;	and &#10;	( isEmpty(payload.DOB ))	&#10;) null&#10;&#10;&#10;&#10;else if(&#10;	( isEmpty(payload.gender) ) &#10;	or &#10;	( isEmpty(payload.firstName) ) &#10;	or &#10;	( isEmpty(payload.lastName) ) &#10;	or &#10;	( isEmpty(payload.DOB ))	&#10;) &#10;	(	payload mapObject &#10;			if(($$) ~= "error")&#10;				($$): "Contact missing 1 out of 4 required fields"&#10;			else&#10;				($$):$ &#10;	)&#10;	&#10;	&#10;else &#10;	payload]' doc:name="Set Payload" doc:id="56088fe0-16c8-4a62-beb9-dd4f8832fd54" />
-					<choice doc:name="Choice" doc:id="ede2ff9e-33e4-4399-962e-1baf8722ab5d" >
-						<when expression='#[payload.error == "Contact missing 1 out of 4 required fields"]'>
-							<raise-error doc:name="Raise error" doc:id="86e5e04f-40fb-494d-bf88-f99dca4e791a" type="CONTACT:MISSING_FIELD" description="Contact missing 1 out of 4 fields ( Gender, firstName, lastName, dateOfBirth )"/>
-						</when>
-						<otherwise >
-							<logger level="INFO" doc:name="Logger" doc:id="187662b4-052f-4962-9390-bf1870d3aac8" />
-						</otherwise>
-					</choice>
-					<batch:aggregator doc:name="Contact Aggregator" doc:id="11e77176-91aa-4ea3-9762-09bb76e465a4" size="10" preserveMimeTypes="true">
-						<logger level="INFO" doc:name="Logger" doc:id="9815a396-50aa-4511-b5d3-a16aa610c121" />
-					</batch:aggregator>
-				</batch:step>
-				<batch:step name="Leads" doc:id="ba457acc-70ec-4578-a39d-324f989223de" acceptExpression="#[!( isEmpty(payload.id) ) and !( isEmpty(payload.emailAdd) ) and ( isEmpty(payload.gender) ) and ( isEmpty(payload.firstName) ) and ( isEmpty(payload.lastName) ) and ( isEmpty(payload.DOB ))]">
-					<batch:aggregator doc:name="Lead Aggregator" doc:id="edc24ed2-5f47-43c4-ac44-f5142d5c1b18" size="10" preserveMimeTypes="true">
-						<logger level="INFO" doc:name="Logger" doc:id="f9ae3c88-d976-4283-9bce-b94b522a2097" />
-					</batch:aggregator>
-				</batch:step>
-				<batch:step name="Error_Step" doc:id="df87b331-9eb1-4648-a701-ce4aeee6aacc" acceptPolicy="ONLY_FAILURES">
-					<batch:aggregator doc:name="Batch Aggregator" doc:id="9d01f03d-ac38-41ae-bc9d-8244475e600e" size="10" preserveMimeTypes="true">
-						<file:write doc:name="Write" doc:id="a42991b1-2173-49ad-a789-598f701a5e93" config-ref="File_Config" path='#["Error\ErrorFile" ++ now() as Date ++ ".csv"]' mode="APPEND" >
-							<file:content ><![CDATA[#[output application/csv header=false
----
-payload map $]]]></file:content>
-						</file:write>
-					</batch:aggregator>
-				</batch:step>
-			</batch:process-records>
-		</batch:job>
-	</flow>
-</mule>
